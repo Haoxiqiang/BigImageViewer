@@ -25,6 +25,7 @@
 package com.github.piasy.biv.utils;
 
 import android.graphics.PointF;
+
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
 import com.github.piasy.biv.view.BigImageView;
 
@@ -33,7 +34,7 @@ import com.github.piasy.biv.view.BigImageView;
  */
 
 public class DisplayOptimizeListener implements SubsamplingScaleImageView.OnImageEventListener {
-    private static final int LONG_IMAGE_SIZE_RATIO = 2;
+    private static final float LONG_IMAGE_SIZE_RATIO = 2;
 
     private final SubsamplingScaleImageView mImageView;
 
@@ -65,29 +66,20 @@ public class DisplayOptimizeListener implements SubsamplingScaleImageView.OnImag
             }
         }
 
-        if (!hasZeroValue && (float) imageHeight / imageWidth > LONG_IMAGE_SIZE_RATIO) {
-            // scale at top
-            mImageView
-                    .animateScaleAndCenter(result, new PointF(imageWidth / 2, 0))
-                    .withEasing(SubsamplingScaleImageView.EASE_OUT_QUAD)
-                    .start();
-        }
-
         // `对结果进行放大裁定，防止计算结果跟双击放大结果过于相近`
         if (Math.abs(result - 0.1) < 0.2f) {
             result += 0.2f;
         }
 
-        if (mInitScaleType == BigImageView.INIT_SCALE_TYPE_CUSTOM) {
+        if (!hasZeroValue && mInitScaleType == BigImageView.INIT_SCALE_TYPE_CUSTOM) {
             float maxScale = Math.max((float) viewWidth / imageWidth,
                     (float) viewHeight / imageHeight);
             if (maxScale > 1) {
-                // image is smaller than screen, it should be zoomed out to its origin size
-                mImageView.setMinScale(1);
-
+                // image is smaller than screen, it should be zoomed out to its origin size.
+                // image is bigger than screen, it should be scale to the result.
+                mImageView.setMinScale(result);
                 // and it should be zoomed in to fill the screen
-                float defaultMaxScale = mImageView.getMaxScale();
-                mImageView.setMaxScale(Math.max(defaultMaxScale, maxScale * 1.2F));
+                mImageView.setMaxScale(Math.max(mImageView.getMaxScale(), maxScale * 1.2F));
             } else {
                 // image is bigger than screen, it should be zoomed out to fit the screen
                 float minScale = Math.min((float) viewWidth / imageWidth,
@@ -95,11 +87,28 @@ public class DisplayOptimizeListener implements SubsamplingScaleImageView.OnImag
                 mImageView.setMinScale(minScale);
                 // but no need to set max scale
             }
+
             // scale to fit screen, and center
-            mImageView.setScaleAndCenter(maxScale, new PointF(imageWidth / 2, imageHeight / 2));
+            PointF centerPoint;
+            if (mImageView.getMaxScale() < mImageView.getMinScale()) {
+                centerPoint = new PointF(imageWidth / 2.0f, imageHeight / 2.0f);
+            } else {
+                centerPoint = new PointF(viewWidth / 2.0f, viewHeight / 2.0f);
+            }
+            mImageView.setScaleAndCenter(mImageView.getMinScale(), centerPoint);
         }
 
-        mImageView.setDoubleTapZoomScale(result);
+        // set double tap scale to the closest the width/height scale.
+        float doubleTapScale = Math.max(mImageView.getMaxScale(), result);
+        mImageView.setDoubleTapZoomScale(doubleTapScale);
+
+        if (!hasZeroValue && (float) imageHeight / imageWidth > LONG_IMAGE_SIZE_RATIO) {
+            // scale at top
+            mImageView
+                    .animateScaleAndCenter(result, new PointF(imageWidth / 2.0f, 0))
+                    .withEasing(SubsamplingScaleImageView.EASE_OUT_QUAD)
+                    .start();
+        }
     }
 
     @Override
